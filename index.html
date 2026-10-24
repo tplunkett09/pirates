@@ -21,7 +21,7 @@ button{background:var(--btn);color:var(--bf);border:0;border-radius:8px;padding:
 button:active{transform:scale(0.95)}
 button.alt{background:transparent;color:var(--fg);border:1px solid var(--bd)}
 table{width:100%;border-collapse:collapse;margin:6px 0}td{padding:3px 2px}
-.touch{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}.touch button{min-width:52px;padding:10px}
+.touch{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}.touch button{min-width:52px;padding:10px;touch-action:none;user-select:none}
 small{opacity:.75;text-align:center}
 #actb{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);padding:10px 18px;font-size:1rem;box-shadow:0 2px 8px rgba(0,0,0,.4)}
 #actb[hidden],#rb[hidden]{display:none}
@@ -30,14 +30,14 @@ small{opacity:.75;text-align:center}
 </head>
 <body>
 <div id="hud"></div>
-<div id="wrap"><canvas id="c" width="800" height="520"></canvas><div id="msg"></div><button id="actb" hidden></button><div id="ov"></div></div>
+<div id="wrap"><canvas id="c" width="800" height="520"></canvas><div id="msg"></div><button id="actb" hidden></button><div id="ov" hidden></div></div>
 <div id="rb" hidden></div>
 <div class="touch">
 <button data-k="arrowleft">◀</button><button data-k="arrowright">▶</button><button data-k=" ">Act</button>
 <button data-k="q">Fire L</button><button data-k="e">Fire R</button><button data-k="b">Board</button><button data-k="f">Flee</button>
 </div>
 <div><button class="alt" id="saveBtn">💾 Save game</button></div>
-<small>Sail: A/D or ←/→ · Space or on-screen button: enter port / attack ship · Battle: Q/E broadsides, F flee</small>
-<script type="module" src="/src/main.js"></script>
+<small>Sail: A/D or ←/→ · Space or on-screen button: enter port / attack ship · Battle: Q/E broadsides, B board, F flee · M: land debug overlay</small>
+<script type="module" src="./src/main.js"></script>
 </body>
 </html>

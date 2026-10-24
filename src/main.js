@@ -1,6 +1,7 @@
 import { PORTS, SHIPS, CAPS, NAT, REGIONS } from './data/world.js';
 import { spawnParticle, updateParticles, drawParticles, particles } from './particles.js';
-import mapSrc from './assets/Worldmap.png';
+// Plain URL so this runs on GitHub Pages with no build step (a bundler-style PNG import only works with Vite/webpack)
+const mapSrc = new URL('./assets/Worldmap.png', import.meta.url).href;
 
 const C = document.getElementById('c'), X = C.getContext('2d'), W = 800, H = 520;
 const OV = document.getElementById('ov'), HUD = document.getElementById('hud'), MSG = document.getElementById('msg');
@@ -547,6 +548,8 @@ function loop() {
 
 addEventListener('keydown', e => { K[e.key.toLowerCase()] = 1; });
 addEventListener('keyup', e => { K[e.key.toLowerCase()] = 0; });
+// On-screen touch buttons (index.html: <button data-k="...">). One-shot keys are cleared by the game when used.
+document.querySelectorAll('.touch button').forEach(b => { const k = b.dataset.k; b.onpointerdown = e => { e.preventDefault(); K[k] = 1; }; b.onpointerup = b.onpointerleave = () => { if (k !== ' ' && k !== 'b' && k !== 'f') K[k] = 0; }; });
 document.getElementById('saveBtn').onclick = () => saveGame(true);
 
 init(); if (hasSave()) menu(); loop();
