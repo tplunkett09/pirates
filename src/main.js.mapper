@@ -1,0 +1,165 @@
+import mapSrc from './assets/Worldmap.png';
+
+const C = document.getElementById('c'), X = C.getContext('2d'), W = 800, H = 520;
+
+// Hide the normal game UI elements
+if (document.getElementById('actb')) document.getElementById('actb').hidden = true;
+if (document.getElementById('hud')) document.getElementById('hud').hidden = true;
+if (document.getElementById('msg')) document.getElementById('msg').hidden = true;
+if (document.getElementById('ov')) document.getElementById('ov').hidden = true;
+
+// The fully expanded 1680 Pirates! port list, plus your 4 global ports
+const portsToMap = [
+  "St. Augustine", "Grand Bahama", "Florida Keys", "Nassau", "Eleuthera", 
+  "Havana", "Santiago", "Port Royal", "Veracruz", "Villa Hermosa", 
+  "Campeche", "Santa Catalina", "Portobelo", "Nombre de Dios", "Tortuga", 
+  "Port-de-Paix", "Petit Goave", "Leogane", "Santo Domingo", "San Juan", 
+  "St. Martin", "St. Eustatius", "St. Kitts", "Nevis", "Antigua", 
+  "Montserrat", "Guadeloupe", "Martinique", "Barbados", "Trinidad", 
+  "Margarita", "Cartagena", "Santa Marta", "Rio de la Hacha", "Maracaibo", 
+  "Puerto Cabello", "Caracas", "Cumana", "Curacao",
+  // Global Expansion Ports
+  "Lisbon", "Plymouth", "Cape Coast", "Batavia"
+];
+
+let mappedPorts = {};
+let activePort = null;
+
+// Create the Editor UI Sidebar
+const editorUI = document.createElement('div');
+editorUI.style.cssText = "position:absolute; top:20px; right:20px; width:220px; max-height:80vh; overflow-y:auto; background:rgba(15, 20, 25, 0.95); color:#fff; padding:15px; font-family:system-ui, sans-serif; border:2px solid #5b8cf0; border-radius:8px; z-index:1000; box-shadow: 0 4px 10px rgba(0,0,0,0.5);";
+document.body.appendChild(editorUI);
+
+function renderUI() {
+  let html = `<h3 style="margin-top:0; border-bottom:1px solid #444; padding-bottom:10px;">🗺️ Map Editor</h3>
+              <p style="font-size:13px; color:#aaa; margin-bottom:15px;">1. Select a port below.<br>2. Click the map to drop pin.<br>3. WASD/Arrows to pan.</p>`;
+  
+  portsToMap.forEach(p => {
+    const isMapped = mappedPorts[p] ? '✅' : '❌';
+    const bg = activePort === p ? '#2a4b8d' : '#222';
+    const border = activePort === p ? '1px solid #5b8cf0' : '1px solid #444';
+    
+    html += `<div style="padding:8px; margin-bottom:6px; background:${bg}; cursor:pointer; border:${border}; border-radius:4px; font-size:14px; transition: 0.2s;" onclick="window.setActivePort('${p}')">
+        ${isMapped} <b>${p}</b>
+    </div>`;
+  });
+  
+  html += `<button onclick="window.exportPorts()" style="margin-top:15px; width:100%; padding:10px; background:#4CAF50; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">💾 Export to File</button>`;
+  
+  editorUI.innerHTML = html;
+}
+
+window.setActivePort = (p) => { 
+  activePort = p; 
+  renderUI(); 
+};
+
+window.exportPorts = () => {
+  if(Object.keys(mappedPorts).length === 0) {
+    alert("You haven't mapped any ports yet!");
+    return;
+  }
+  // Convert coordinates to text file
+  let fileContent = "PORT COORDINATES:\n\n";
+  for (const [name, coords] of Object.entries(mappedPorts)) {
+    fileContent += `${name}: x: ${coords.x}, y: ${coords.y}\n`;
+  }
+  
+  // Trigger download
+  const blob = new Blob([fileContent], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = "Map_Coordinates.txt";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+};
+
+// Initialize UI
+renderUI();
+
+// ------------------------------------------------------------------
+// Canvas/Map Logic
+// ------------------------------------------------------------------
+const WW = 20000, WH = 10000;
+const cam = { x: 5000, y: 3500 }; 
+let mapW = 4000, mapH = 2000;
+let K = {};
+
+const mapImg = new Image();
+let mapLoaded = false;
+mapImg.onload = () => { 
+  mapLoaded = true; 
+  mapW = mapImg.width; 
+  mapH = mapImg.height; 
+};
+mapImg.src = mapSrc;
+
+C.addEventListener('mousedown', (e) => {
+  if (!activePort) {
+    alert("Please select a port from the menu on the right first!");
+    return;
+  }
+  
+  const rect = C.getBoundingClientRect();
+  const worldX = Math.round(cam.x + (e.clientX - rect.left));
+  const worldY = Math.round(cam.y + (e.clientY - rect.top));
+  
+  mappedPorts[activePort] = { x: worldX, y: worldY };
+  renderUI();
+  
+  // Auto-select the next unmapped port to save clicks
+  const nextUnmapped = portsToMap.find(p => !mappedPorts[p]);
+  if (nextUnmapped) {
+    activePort = nextUnmapped;
+    renderUI();
+  }
+});
+
+addEventListener('keydown', e => { K[e.key.toLowerCase()] = 1; });
+addEventListener('keyup', e => { K[e.key.toLowerCase()] = 0; });
+
+function loop() {
+  const speed = 20; 
+  if (K.a || K.arrowleft) cam.x -= speed;
+  if (K.d || K.arrowright) cam.x += speed;
+  if (K.w || K.arrowup) cam.y -= speed;
+  if (K.s || K.arrowdown) cam.y += speed;
+
+  cam.x = Math.max(0, Math.min(WW - W, cam.x));
+  cam.y = Math.max(0, Math.min(WH - H, cam.y));
+
+  // Draw Map
+  if (mapLoaded) {
+    const scaleX = mapW / WW;
+    const scaleY = mapH / WH;
+    X.drawImage(mapImg, cam.x * scaleX, cam.y * scaleY, W * scaleX, H * scaleY, 0, 0, W, H); 
+  } else {
+    X.fillStyle = '#1f5f86'; X.fillRect(0, 0, W, H);
+  }
+
+  // Draw dropped pins
+  X.save();
+  X.translate(-cam.x, -cam.y);
+  for (let name in mappedPorts) {
+    const p = mappedPorts[name];
+    
+    // Highlight the pin if it belongs to the currently selected port
+    X.fillStyle = name === activePort ? '#5b8cf0' : '#e8c03a'; 
+    
+    // Pin circle
+    X.beginPath(); X.arc(p.x, p.y, 8, 0, Math.PI * 2); X.fill();
+    X.strokeStyle = 'black'; X.lineWidth = 2; X.stroke();
+    
+    // Text Label
+    X.fillStyle = 'white';
+    X.font = 'bold 15px system-ui';
+    X.strokeText(name, p.x + 12, p.y + 6);
+    X.fillText(name, p.x + 12, p.y + 6);
+  }
+  X.restore();
+
+  requestAnimationFrame(loop);
+}
+loop();
