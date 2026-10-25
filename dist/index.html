@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pirates: World Edition</title>
+<style>
+:root{--bg:#14181c;--fg:#eee;--card:#1e252b;--bd:#3a464f;--btn:#d68a52;--bf:#111;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px;box-sizing:border-box}
+#wrap{position:relative;width:100%;max-width:800px}
+canvas{width:100%;display:block;border-radius:10px;background:#1f5f86;box-shadow:0 4px 12px rgba(0,0,0,0.5)}
+#hud{font-size:.9rem;display:flex;flex-wrap:wrap;gap:4px 16px;justify-content:center;font-variant-numeric:tabular-nums}
+#msg{position:absolute;left:0;right:0;bottom:8px;text-align:center;color:#fff;text-shadow:0 1px 3px #000;font-weight:600;pointer-events:none;padding:0 8px}
+#ov{position:absolute;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;border-radius:10px;overflow:auto;backdrop-filter:blur(3px)}
+#ov[hidden]{display:none}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px 18px;width:min(92%,460px);max-height:96%;overflow:auto;box-sizing:border-box;box-shadow:0 8px 24px rgba(0,0,0,0.8)}
+.card h2{margin:0 0 6px;font-size:1.15rem}
+button{background:var(--btn);color:var(--bf);border:0;border-radius:8px;padding:6px 12px;margin:2px;font-size:.9rem;cursor:pointer;transition:transform 0.1s}
+button:active{transform:scale(0.95)}
+button.alt{background:transparent;color:var(--fg);border:1px solid var(--bd)}
+table{width:100%;border-collapse:collapse;margin:6px 0}td{padding:3px 2px}
+.touch{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}.touch button{min-width:52px;padding:10px;touch-action:none;user-select:none}
+small{opacity:.75;text-align:center}
+#actb{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);padding:10px 18px;font-size:1rem;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+#actb[hidden],#rb[hidden]{display:none}
+#rb{width:100%;max-width:800px;text-align:center;font-size:.9rem}
+</style>
+  <script type="module" crossorigin src="/pirates/assets/index-CMMth5p5.js"></script>
+</head>
+<body>
+<div id="hud"></div>
+<div id="wrap"><canvas id="c" width="800" height="520"></canvas><div id="msg"></div><button id="actb" hidden></button><div id="ov" hidden></div></div>
+<div id="rb" hidden></div>
+<div class="touch">
+<button data-k="arrowleft">◀</button><button data-k="arrowright">▶</button><button data-k=" ">Act</button>
+<button data-k="q">Fire L</button><button data-k="e">Fire R</button><button data-k="b">Board</button><button data-k="f">Flee</button>
+</div>
+<div><button class="alt" id="saveBtn">💾 Save game</button></div>
+<small>Sail: A/D or ←/→ · Space or on-screen button: enter port / attack ship · Battle: Q/E broadsides, B board, F flee · M: land debug overlay</small>
+</body>
+</html>
