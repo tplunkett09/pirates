@@ -106,6 +106,7 @@ function aim(s) {
   return path[0];
 }
 const bribeCost = n => 250 + 200 * (-G.rep[n] - 1), fireCd = c => Math.round(40 + 1800 / (c + 8));
+const boardRange = () => (SHIPS[G.ship].L + SHIPS[B.s.t].L) + 25;   // ships are drawn 2.2x, so the old fixed 70px was often less than one hull length
 const enemyGuns = () => Math.max(0, SHIPS[B.s.t].guns + (B.s.cap ? B.s.cap.g : 0) - B.e.gl);
 const nrm = a => { while (a > PI) a -= 2 * PI; while (a < -PI) a += 2 * PI; return a; };
 const hostile = n => n === 'PI' || G.rep[n] < 0;
@@ -168,6 +169,7 @@ const gunsNow = () => Math.max(0, (SHIPS[G.ship].guns + 2 * G.up[0]) - G.gl), sp
 function recalc() { const d = SHIPS[G.ship]; G.maxHull = d.hull + 40 * G.up[2]; CAP = d.cargo + 30 * G.up[3]; if (G.hull > G.maxHull) G.hull = G.maxHull; }
 
 // ---------- graphics: bright cartoon-Caribbean look (animated seas, drifting clouds, towns, billowing sails) ----------
+const REVEAL = 290;   // world px: ships closer than this show names and special markings (fully by 240, fading out by 340)
 const hash = (x, y) => { const h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return h - Math.floor(h); };
 const clouds = Array.from({ length: 16 }, () => ({ x: R() * 1500, y: R() * 1500, s: 40 + R() * 60, o: [R(), R(), R(), R()] }));
 let splashes = [], flashes = [], tick = 0;
@@ -349,7 +351,12 @@ function seaDraw() {
   
   drawParticles(X);
   if (dbg) PORTS.forEach(p => { if (isLandArea(p.x, p.y, 6)) { X.fillStyle = '#f00'; X.fillText('LAND: ' + p.name, p.x, p.y + 24); } });
-  S.forEach(q => { drawShip(q.x, q.y, q.a, q.tr ? '#ffd700' : NAT[q.n][1], q.tr ? 1.25 : 1, q.t, q.roll, q.hp / q.maxHp); if (q.tr || q.cap) { X.fillStyle = q.tr ? '#ffd700' : '#fff'; X.font = 'bold 11px system-ui'; X.fillText(q.tr ? '★ Treasure galleon' : '☠ ' + q.cap.name, q.x, q.y - 22); } });
+  S.forEach(q => {
+    // far away every ship looks like an ordinary ship of its nation; names, treasure and captain markings fade in as you close
+    const rev = Math.max(0, Math.min(1, (REVEAL + 50 - Math.hypot(q.x - P.x, q.y - P.y)) / 100)), known = rev >= .5;
+    drawShip(q.x, q.y, q.a, known && q.tr ? '#ffd700' : NAT[q.n][1], known && q.tr ? 1.25 : 1, q.t, q.roll, q.hp / q.maxHp);
+    if (rev > 0 && (q.tr || q.cap)) { X.globalAlpha = rev; X.fillStyle = q.tr ? '#ffd700' : '#fff'; X.font = 'bold 11px system-ui'; X.fillText(q.tr ? '★ Treasure galleon' : '☠ ' + q.cap.name, q.x, q.y - 22); X.globalAlpha = 1; }
+  });
   drawShip(P.x, P.y, P.a, NAT.EN[1], 1.15, G.ship, P.roll, G.hull / G.maxHull);
   X.restore();
   drawClouds(false);
@@ -425,7 +432,7 @@ function battleUpdate() {
     return true;
   });
   if (K.f) { K.f = 0; if (flee()) return; }
-  if (K.b) { K.b = 0; if (dist < 70) return board(); say('Too far to board.'); }
+  if (K.b) { K.b = 0; if (dist < boardRange()) return board(); say('Too far to board. Close in until the green ring appears.'); }
   if (B.sur && e.hp > 0) return surrender();
   if (e.hp <= 0) return win(.5, 'You sank the ship!');
   if (G.hull <= 0) return gameOver('Your ship went down.');
@@ -470,6 +477,8 @@ function battleDraw() {
   const e = B.e, cap = B.s.cap;
   drawShip(e.x, e.y, e.a, cap ? '#e11' : B.s.tr ? '#ffd700' : NAT[B.s.n][1], 2.2, B.s.t, e.roll, Math.max(0, e.hp) / e.maxHp);
   drawShip(B.p.x, B.p.y, B.p.a, NAT.EN[1], 2.2, G.ship, B.p.roll, Math.max(0, G.hull) / G.maxHull);
+  const bd = Math.hypot(B.p.x - e.x, B.p.y - e.y), brg = boardRange();
+  if (bd < brg * 2) { const near = bd < brg; X.strokeStyle = near ? '#4cd964' : 'rgba(255,214,10,.6)'; X.lineWidth = 3; X.setLineDash(near ? [] : [8, 6]); X.beginPath(); X.arc(e.x, e.y, brg, 0, 7); X.stroke(); X.setLineDash([]); if (near) { X.fillStyle = '#4cd964'; X.font = 'bold 16px system-ui'; X.textAlign = 'center'; X.fillText('⚓ Press B to board!', W / 2, H - 34); } }
   X.font = '13px system-ui'; X.fillStyle = '#fff'; X.textAlign = 'left';
   X.fillText(`Your ${SHIPS[G.ship].name} · hull ${Math.max(0, G.hull | 0)} · crew ${G.crew}`, 12, 22);
   X.textAlign = 'right';
@@ -546,8 +555,8 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
-addEventListener('keydown', e => { K[e.key.toLowerCase()] = 1; });
-addEventListener('keyup', e => { K[e.key.toLowerCase()] = 0; });
+addEventListener('keydown', e => { const k = e.key.toLowerCase(); K[k] = 1; if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault(); });   // stop the page scrolling while playing
+addEventListener('keyup', e => { const k = e.key.toLowerCase(); if (k !== 'b' && k !== 'f' && k !== ' ') K[k] = 0; });   // one-shot keys stay latched until the game uses them, so a quick tap is never missed
 // On-screen touch buttons (index.html: <button data-k="...">). One-shot keys are cleared by the game when used.
 document.querySelectorAll('.touch button').forEach(b => { const k = b.dataset.k; b.onpointerdown = e => { e.preventDefault(); K[k] = 1; }; b.onpointerup = b.onpointerleave = () => { if (k !== ' ' && k !== 'b' && k !== 'f') K[k] = 0; }; });
 document.getElementById('saveBtn').onclick = () => saveGame(true);
