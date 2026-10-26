@@ -83,7 +83,7 @@ function clearLine(x0, y0, x1, y1) { const n = Math.ceil(Math.hypot(x1 - x0, y1 
 function canReach(x, y, p) { if (!WOK) return true; const d = flowFor(p), cx = x / GC | 0, cy = y / GC | 0; for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const a = cx + dx, b = cy + dy; if (a >= 0 && b >= 0 && a < GX && b < GY && d[b * GX + a] >= 0) return true; } return false; }
 function waterNear(p) { // open water beside a port (ports sit on the coast, so spawning exactly on one can trap a ship)
   const cx = p.x / GC | 0, cy = p.y / GC | 0, c = [];
-  for (let dy = -5; dy <= 5; dy++) for (let dx = -5; dx <= 5; dx++) if (wok(cx + dx, cy + dy)) c.push([(cx + dx) * GC + 20, (cy + dy) * GC + 20]);
+  for (let dy = -5; dy <= 5; dy++) for (let dx = -5; dx <= 5; dx++) if (wok(cx + dx, cy + dy) && !isLandArea((cx + dx) * GC + 20, (cy + dy) * GC + 20, 30)) c.push([(cx + dx) * GC + 20, (cy + dy) * GC + 20]);
   c.sort((a, b) => Math.hypot(a[0] - p.x, a[1] - p.y) - Math.hypot(b[0] - p.x, b[1] - p.y));
   const q = c[R() * Math.min(6, c.length) | 0]; return q ? { x: q[0], y: q[1] } : null;
 }
@@ -141,7 +141,7 @@ function spawn(init) {
     do { 
       x = region.x + (R() - 0.5) * 2 * region.r; y = region.y + (R() - 0.5) * 2 * region.r; 
       attempts++;
-    } while ((Math.hypot(x - P.x, y - P.y) < 600 || Math.hypot(x - region.x, y - region.y) > region.r || isLandArea(x, y, 15) || (WOK && !wok(x / GC | 0, y / GC | 0))) && attempts < 200); 
+    } while ((Math.hypot(x - P.x, y - P.y) < 600 || Math.hypot(x - region.x, y - region.y) > region.r || isLandArea(x, y, 30) || (WOK && !wok(x / GC | 0, y / GC | 0))) && attempts < 200); 
     
     // FAILSAFE: If it loops 200 times and can't find water, abort the spawn so the browser doesn't freeze!
     if (attempts >= 200) return; 
@@ -162,14 +162,37 @@ function spawn(init) {
   const rp = PORTS.filter(p => p.region === region.id), own = rp.filter(p => p.n === n), pl = (n !== 'PI' && own.length && R() < .6) ? own : rp;
   const destPort = pickDest(pl, rp, x, y, o); if (!destPort) return;
   
-  S.push({ x, y, a: R() * 6.3, n, t, cap: cp, tr, gold: tr ? Math.round(800 + R() * 1200) : 0, hold: Math.round((d.cargo * .6 + d.hull * .5) * (tr ? .9 : .4 + .6 * R())), roll: 0, hp: Math.round(d.hull * (cp ? cp.hp : .5 + R() * .5)), maxHp: d.hull, crew: Math.round(d.crew * (cp ? .55 + R() * .2 : .3 + R() * .4)), w: destPort, cd: 0 });
+  S.push({ x, y, a: R() * 6.3, n, t, cap: cp, tr, gold: tr ? Math.round(800 + R() * 1200) : 0, hold: Math.round((d.cargo * .6 + d.hull * .5) * (tr ? .9 : .4 + .6 * R())), roll: 0, hp: Math.round(d.hull * (cp ? cp.hp : .5 + R() * .5)), maxHp: d.hull, crew: Math.round(d.crew * (cp ? .55 + R() * .2 : .3 + R() * .4)), w: destPort, cd: 0, trim: .85 + R() * .3, sl: R() < .2 ? 1 + (R() * 3 | 0) : 0, nm: shipName(n, cp, tr) });
 }
 
-const gunsNow = () => Math.max(0, (SHIPS[G.ship].guns + 2 * G.up[0]) - G.gl), spdM = () => SHIPS[G.ship].spd * (1 + .12 * G.up[1]);
+const gunsNow = () => Math.max(0, (SHIPS[G.ship].guns + 2 * G.up[0]) - G.gl), spdM = () => SHIPS[G.ship].spd * (1 + SAIL_STEP * G.up[1]);
 function recalc() { const d = SHIPS[G.ship]; G.maxHull = d.hull + 40 * G.up[2]; CAP = d.cargo + 30 * G.up[3]; if (G.hull > G.maxHull) G.hull = G.maxHull; }
 
 // ---------- graphics: bright cartoon-Caribbean look (animated seas, drifting clouds, towns, billowing sails) ----------
-const REVEAL = 290;   // world px: ships closer than this show names and special markings (fully by 240, fading out by 340)
+const SAIL_STEP = .15;   // each Sails upgrade level adds 15% to a ship's top speed
+const tagRadius = () => 216 * W / Math.max(1, C.getBoundingClientRect().width);   // 2.25 on-screen inches (96 CSS px per inch) expressed in canvas pixels
+const windF = a => .3 + .7 * (1 + Math.cos(a - windA)) / 2;                         // 1 = running before the wind, .3 = beating into it
+const shipTop = s => SHIPS[s.t].spd * (s.trim || 1) * (1 + SAIL_STEP * (s.sl || 0)) * (s.cap ? s.cap.spd : 1);   // each ship's own speed limit
+const SHIP_NAMES = {
+  ES: ['Santa Rosa', 'San Felipe', 'Nuestra Señora', 'Santa Clara', 'San Cristóbal', 'La Concepción', 'San Juan', 'Santa Ana'],
+  EN: ['Sea Lion', 'Mary Rose', 'Golden Hind', 'Swallow', 'Providence', 'Defiance', 'Resolution', 'Endeavour'],
+  FR: ['La Fortune', 'Le Soleil', 'Saint-Louis', 'La Belle', 'Le Dauphin', 'L’Aigle', 'La Licorne', 'Sainte-Anne'],
+  NL: ['De Zeehond', 'Oranje', 'Gouden Leeuw', 'De Eendracht', 'Zeepaard', 'De Hoop', 'Utrecht', 'Vliegende Hollander'],
+  PI: ['Black Swan', 'Sea Wolf', 'Revenge', 'Dread Fortune', 'Storm Crow', 'Red Tide', 'Ravenous', 'Salty Dog']
+}, TREASURE_NAMES = ['Nuestra Señora de Atocha', 'San José', 'Santa Margarita', 'El Dorado'];
+const shipName = (n, cp, tr) => cp ? cp.ship : tr ? TREASURE_NAMES[R() * TREASURE_NAMES.length | 0] : SHIP_NAMES[n][R() * SHIP_NAMES[n].length | 0];
+function drawTag(q, rev) {
+  const top = shipTop(q), mine = spdM(), l1 = q.cap ? '☠ ' + q.cap.name : q.tr ? '★ ' + (q.nm || 'Treasure galleon') : (q.nm || NAT[q.n][0] + ' ship');
+  const l2 = (q.cap ? q.cap.ship : q.tr ? 'Treasure galleon' : NAT[q.n][0] + ' ' + SHIPS[q.t].name) + (q.sl ? ' · sails +' + q.sl : '');
+  const l3 = top > mine * 1.05 ? 'faster than you' : top < mine * .95 ? 'slower than you' : 'similar speed';
+  X.save(); X.globalAlpha = rev; X.textAlign = 'center'; X.font = 'bold 11px system-ui'; const w1 = X.measureText(l1).width; X.font = '10px system-ui';
+  const w = Math.max(w1, X.measureText(l2).width, X.measureText(l3).width) + 12, h = 38, bx = q.x - w / 2, by = q.y - 22 - h;
+  X.fillStyle = 'rgba(245,230,190,.93)'; X.fillRect(bx, by, w, h); X.strokeStyle = q.tr ? '#c9a100' : q.cap ? '#a11' : '#5a3d1e'; X.lineWidth = 1.2; X.strokeRect(bx, by, w, h);
+  X.fillStyle = q.tr ? '#8a6a00' : q.cap ? '#a11' : '#2a1a0a'; X.font = 'bold 11px system-ui'; X.fillText(l1, q.x, by + 13);
+  X.font = '10px system-ui'; X.fillStyle = '#2a1a0a'; X.fillText(l2, q.x, by + 25);
+  X.fillStyle = top > mine * 1.05 ? '#a11' : top < mine * .95 ? '#1a7a2e' : '#555'; X.fillText(l3, q.x, by + 36); X.restore();
+}
+function nearestWater(x, y) { const cx = x / GC | 0, cy = y / GC | 0; for (let r = 0; r <= 8; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if ((Math.abs(dx) === r || Math.abs(dy) === r) && wok(cx + dx, cy + dy)) return { x: (cx + dx) * GC + 20, y: (cy + dy) * GC + 20 }; return null; }
 const hash = (x, y) => { const h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return h - Math.floor(h); };
 const clouds = Array.from({ length: 16 }, () => ({ x: R() * 1500, y: R() * 1500, s: 40 + R() * 60, o: [R(), R(), R(), R()] }));
 let splashes = [], flashes = [], tick = 0;
@@ -274,6 +297,7 @@ function seaUpdate() {
   G.day += .015; if (++svT > 600) { svT = 0; saveGame(); } 
   
   S.forEach(s => {
+    if (WOK && isLand(s.x, s.y)) { const w = nearestWater(s.x, s.y); if (w) { s.x = w.x; s.y = w.y; } else { s.in = 1; return; } }   // never leave a ship stranded on land
     const [tx, ty] = aim(s);
     let targetA = nrm(Math.atan2(ty - s.y, tx - s.x) - s.a);
     let turnSpeed = Math.max(-.05, Math.min(.05, targetA));
@@ -293,7 +317,7 @@ function seaUpdate() {
     }
     
     if (!blocked) {   // predict the closest approach to the player and swerve early so we never run into them
-      const sv0 = 1.1 * SHIPS[s.t].spd, psp = 1.7 * spdM() * (.3 + .7 * (1 + Math.cos(P.a - windA)) / 2);
+      const sv0 = 1.7 * shipTop(s) * windF(s.a), psp = 1.7 * spdM() * (.3 + .7 * (1 + Math.cos(P.a - windA)) / 2);
       const rx = P.x - s.x, ry = P.y - s.y, vx = Math.cos(P.a) * psp - Math.cos(s.a) * sv0, vy = Math.sin(P.a) * psp - Math.sin(s.a) * sv0, vv = vx * vx + vy * vy;
       const tc = vv > 1e-6 ? -(rx * vx + ry * vy) / vv : 0, d0 = Math.hypot(rx, ry), br = nrm(Math.atan2(ry, rx) - s.a);
       if (d0 < 70 && Math.abs(br) < 2.2) turnSpeed = (br > 0 ? -1 : 1) * .08;   // already close: turn hard away
@@ -303,13 +327,13 @@ function seaUpdate() {
       }
     }
     s.a += turnSpeed; s.roll += ((turnSpeed > 0 ? 1 : -1) * 0.6 - s.roll) * 0.1;
-    const sv = 1.1 * SHIPS[s.t].spd; 
+    const sv = 1.7 * shipTop(s) * windF(s.a);   // same formula as the player, capped by this ship's own limit
     let snx = s.x + Math.cos(s.a) * sv; let sny = s.y + Math.sin(s.a) * sv;
     
     const sc0 = landScore(s.x, s.y, 7), fr = (x, y) => { const c = landScore(x, y, 7); return c === 0 || c < sc0; };
     if (fr(snx, sny)) { s.x = snx; s.y = sny; } else if (fr(snx, s.y)) s.x = snx; else if (fr(s.x, sny)) s.y = sny; else s.a += targetA >= 0 ? 0.15 : -0.15;
     if (s.px === undefined) { s.px = s.x; s.py = s.y; s.ck = 0; s.sk = 0; }
-    if (++s.ck >= 120) {   // moved less than 30px in 2 seconds: pick a new route; if that fails, sail away (it respawns at a port)
+    if (++s.ck >= 180) {   // moved less than 30px in 2 seconds: pick a new route; if that fails, sail away (it respawns at a port)
       s.ck = 0;
       const prog = s.pfv === undefined ? 9 : s.pfv - s.fv;
       if (Math.hypot(s.x - s.px, s.y - s.py) < 30 || (s.fv > 1 && prog < 1)) {
@@ -352,10 +376,10 @@ function seaDraw() {
   drawParticles(X);
   if (dbg) PORTS.forEach(p => { if (isLandArea(p.x, p.y, 6)) { X.fillStyle = '#f00'; X.fillText('LAND: ' + p.name, p.x, p.y + 24); } });
   S.forEach(q => {
-    // far away every ship looks like an ordinary ship of its nation; names, treasure and captain markings fade in as you close
-    const rev = Math.max(0, Math.min(1, (REVEAL + 50 - Math.hypot(q.x - P.x, q.y - P.y)) / 100)), known = rev >= .5;
+    // tags (name, type, treasure/captain markings) show within 2.25 on-screen inches of your ship
+    const rad = tagRadius(), dd = Math.hypot(q.x - P.x, q.y - P.y), rev = Math.max(0, Math.min(1, (rad - dd) / (rad * .12))), known = rev >= .5;
     drawShip(q.x, q.y, q.a, known && q.tr ? '#ffd700' : NAT[q.n][1], known && q.tr ? 1.25 : 1, q.t, q.roll, q.hp / q.maxHp);
-    if (rev > 0 && (q.tr || q.cap)) { X.globalAlpha = rev; X.fillStyle = q.tr ? '#ffd700' : '#fff'; X.font = 'bold 11px system-ui'; X.fillText(q.tr ? '★ Treasure galleon' : '☠ ' + q.cap.name, q.x, q.y - 22); X.globalAlpha = 1; }
+    if (rev > 0) drawTag(q, rev);
   });
   drawShip(P.x, P.y, P.a, NAT.EN[1], 1.15, G.ship, P.roll, G.hull / G.maxHull);
   X.restore();
@@ -407,7 +431,7 @@ function battleUpdate() {
     if (Math.abs(rel + PI / 2) < .3 && !e.cd[0] && R() < .3) fire(e, -1, 0);
   }
   [p, e].forEach(o => {
-    const me = o === p, v = me ? 1.3 * spdM() : 1.3 * SHIPS[B.s.t].spd * (cap ? cap.spd : 1), rate = (me ? 1 : cap ? cap.rate : 1) / fireCd(me ? G.crew : e.crew);
+    const me = o === p, v = me ? 1.3 * spdM() : 1.3 * shipTop(B.s), rate = (me ? 1 : cap ? cap.rate : 1) / fireCd(me ? G.crew : e.crew);
     o.x = Math.max(10, Math.min(W - 10, o.x + Math.cos(o.a) * v)); o.y = Math.max(10, Math.min(H - 10, o.y + Math.sin(o.a) * v));
     o.cd = o.cd.map(c => Math.max(0, c - rate));
     if (R() < 0.4) spawnParticle('wake', o.x - Math.cos(o.a) * 15, o.y - Math.sin(o.a) * 15, o.a + PI, v * 0.2);
@@ -489,7 +513,7 @@ function battleDraw() {
 }
 
 const UPN = ['Cannons', 'Sails', 'Hull', 'Cargo', 'Range'], UPC = [200, 150, 200, 120, 180];
-const UPD = [ l => (SHIPS[G.ship].guns + 2 * l) + ' guns', l => '+' + l * 12 + '% speed', l => (SHIPS[G.ship].hull + 40 * l) + ' max hull', l => (SHIPS[G.ship].cargo + 30 * l) + ' cargo', l => '+' + l * 15 + '% range' ];
+const UPD = [ l => (SHIPS[G.ship].guns + 2 * l) + ' guns', l => '+' + Math.round(l * SAIL_STEP * 100) + '% speed', l => (SHIPS[G.ship].hull + 40 * l) + ' max hull', l => (SHIPS[G.ship].cargo + 30 * l) + ' cargo', l => '+' + l * 15 + '% range' ];
 
 function openPort(p) { mode = 'port'; cur = p; prices = GOODS.map((g, i) => Math.round(BASE[i] * p.m[i] * (.9 + R() * .2))); renderPort(); }
 function renderPort() {
@@ -530,7 +554,7 @@ function hasSave() { try { return !!localStorage.getItem(SK); } catch (e) { retu
 function saveGame(manual) {
   if (mode !== 'sea' && mode !== 'port') { if (manual) say('You can save while sailing or in port.'); return; }
   let ok = true;
-  try { localStorage.setItem(SK, JSON.stringify({ G, P, windA, S: S.map(s => ({ x: s.x, y: s.y, a: s.a, n: s.n, t: s.t, hp: s.hp, maxHp: s.maxHp, crew: s.crew, tr: s.tr ? 1 : 0, gold: s.gold || 0, hold: s.hold || 0, k: s.cap ? CAPS.indexOf(s.cap) : -1, w: PORTS.indexOf(s.w) })), ports: PORTS.map(p => ({ gar: p.gar, wealth: p.wealth, gov: !!p.gov, cap: !!p.cap })) })); } catch (e) { ok = false; }
+  try { localStorage.setItem(SK, JSON.stringify({ G, P, windA, S: S.map(s => ({ x: s.x, y: s.y, a: s.a, n: s.n, t: s.t, hp: s.hp, maxHp: s.maxHp, crew: s.crew, trim: s.trim, sl: s.sl, nm: s.nm, tr: s.tr ? 1 : 0, gold: s.gold || 0, hold: s.hold || 0, k: s.cap ? CAPS.indexOf(s.cap) : -1, w: PORTS.indexOf(s.w) })), ports: PORTS.map(p => ({ gar: p.gar, wealth: p.wealth, gov: !!p.gov, cap: !!p.cap })) })); } catch (e) { ok = false; }
   if (manual) say(ok ? 'Game saved.' : 'Saving is not available here.');
 }
 window.loadGame = () => {
